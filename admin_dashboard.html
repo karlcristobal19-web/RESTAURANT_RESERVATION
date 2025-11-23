@@ -11,25 +11,10 @@ body {
     color:#fff;
     background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.65)), url('{{ url_for("static", filename="images/home_bg.png") }}') center/cover fixed no-repeat;
 }
-.container {
-    max-width:1200px;
-    margin:28px auto;
-    padding:18px;
-}
-header h1 {
-    margin:0 0 20px 0;
-    font-size:24px;
-    text-align:center;
-}
-.panel {
-    background:rgba(0,0,0,0.6);
-    padding:14px;
-    border-radius:10px;
-    margin-bottom:20px;
-}
-.panel h2, .panel h3 {
-    margin-top:0; margin-bottom:10px;
-}
+.container { max-width:1200px; margin:28px auto; padding:18px; }
+header h1 { margin:0 0 20px 0; font-size:24px; text-align:center; }
+.panel { background:rgba(0,0,0,0.6); padding:14px; border-radius:10px; margin-bottom:20px; }
+.panel h2, .panel h3 { margin-top:0; margin-bottom:10px; }
 
 /* Floor map */
 .floor {
@@ -54,18 +39,8 @@ header h1 {
 .table.reserved{ background:#e74c3c; color:#fff; }
 .table.small{ width:90px; height:60px; }
 .table.wide{ width:140px; height:90px; }
-
-.table .num { position:absolute; top:6px; left:8px; font-size:12px; font-weight:800; }
+.table .num { font-size:12px; font-weight:800; }
 .table .cap { font-size:16px; }
-
-.chair{
-    width:18px; height:18px; background:#f1c40f; border-radius:50%;
-    position:absolute; z-index:1;
-}
-.chair.top{ top:-24px; left:50%; transform:translateX(-50%); }
-.chair.bottom{ bottom:-24px; left:50%; transform:translateX(-50%); }
-.chair.left{ left:-24px; top:50%; transform:translateY(-50%); }
-.chair.right{ right:-24px; top:50%; transform:translateY(-50%); }
 
 /* Tables below */
 table { width:100%; border-collapse:collapse; margin-top:12px; }
@@ -88,13 +63,6 @@ button { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; font-
 <div class="panel floor" id="floorMap">
   {% for t in tables %}
   <div class="table-container" id="container{{ t.table_number }}" data-id="{{ t.id }}">
-    <!-- Chairs -->
-    <div class="chair top"></div>
-    <div class="chair bottom"></div>
-    <div class="chair left"></div>
-    <div class="chair right"></div>
-
-    <!-- Table -->
     <div class="table {% if t.status=='available' %}available{% else %}reserved{% endif %} {% if t.capacity<=2 %}small{% endif %}"
          id="t{{ t.table_number }}"
          data-number="{{ t.table_number }}" data-capacity="{{ t.capacity }}"
@@ -119,9 +87,9 @@ button { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; font-
 {% for r in reservations %}
 <tr>
   <td>{{ r.id }}</td>
-  <td>{{ r.user_name }}</td>
+  <td>{{ r.user_name or 'N/A' }}</td>
   <td>{{ r.time }}</td>
-  <td>{{ r.table_id or 'N/A' }}</td>
+  <td>{{ r.table_number or 'N/A' }}</td>
   <td>{{ r.people }}</td>
   <td>
     <select class="status-dropdown" data-id="{{ r.id }}">
@@ -130,7 +98,7 @@ button { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; font-
       <option value="completed" {% if r.status=='completed' %}selected{% endif %}>Completed</option>
     </select>
   </td>
-  <td>{{ r.payment_method or 'none' }} <button class="btn-mark-paid" data-id="{{ r.id }}">Mark Paid</button></td>
+  <td>{{ r.payment_method or 'none' }}</td>
   <td><button class="btn-delete" data-id="{{ r.id }}">Delete</button></td>
 </tr>
 {% endfor %}
@@ -138,19 +106,20 @@ button { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; font-
 </table>
 </div>
 
-<!-- Users -->
+<!-- Orders -->
 <div class="panel">
-<h3>All Users</h3>
+<h3>All Orders</h3>
 <table>
-<thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
+<thead><tr><th>ID</th><th>User</th><th>Items</th><th>Total</th><th>Time</th><th>Actions</th></tr></thead>
 <tbody>
-{% for u in users %}
+{% for o in orders %}
 <tr>
-  <td>{{ u.id }}</td>
-  <td>{{ u.username }}</td>
-  <td>{{ u.email }}</td>
-  <td>{{ u.role }}</td>
-  <td><button class="btn-delete" data-id="{{ u.id }}">Delete</button></td>
+  <td>{{ o.id }}</td>
+  <td>{{ o.user_name or 'N/A' }}</td>
+  <td>{{ o.items }}</td>
+  <td>{{ o.total }}</td>
+  <td>{{ o.time }}</td>
+  <td><button class="btn-delete" data-id="{{ o.id }}">Delete</button></td>
 </tr>
 {% endfor %}
 </tbody>
@@ -159,29 +128,31 @@ button { padding:6px 10px; border:none; border-radius:6px; cursor:pointer; font-
 
 <!-- JS -->
 <script>
-// Place tables
-function placeTables(){
-  const containers = document.querySelectorAll('.table-container');
-  containers.forEach(c=>{
+// Toggle table status
+document.querySelectorAll('.table-container').forEach(c=>{
     const table = c.querySelector('.table');
     table.addEventListener('click', ()=>{
-      const id = c.dataset.id;
-      const current = table.classList.contains('available') ? 'available' : 'reserved';
-      const newStatus = current==='available' ? 'reserved' : 'available';
-      table.classList.remove(current); table.classList.add(newStatus);
-      fetch('/update_table_status',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,status:newStatus})})
-        .then(r=>r.json()).then(d=>console.log(d));
-    });
-  });
-}
+        const tableId = c.dataset.id;
 
-// Mark Paid button
-document.querySelectorAll('.btn-mark-paid').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    const id = btn.dataset.id;
-    fetch('/mark_paid',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})})
-      .then(r=>r.json()).then(()=> location.reload());
-  });
+        if(table.classList.contains('reserved')){
+            // send release request
+            fetch('/release_table', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({table_id: tableId})
+            })
+            .then(r => r.json())
+            .then(d => {
+                if(d.success){
+                    table.classList.remove('reserved');
+                    table.classList.add('available');
+                    table.querySelector('.cap').textContent = table.dataset.capacity + 'p';
+                } else {
+                    alert('Could not release table: ' + d.error);
+                }
+            });
+        }
+    });
 });
 
 // Status dropdown change
@@ -189,23 +160,49 @@ document.querySelectorAll('.status-dropdown').forEach(dd=>{
   dd.addEventListener('change', ()=>{
     const id = dd.dataset.id;
     const status = dd.value;
-    fetch('/update_reservation_status',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,status})})
-      .then(r=>r.json()).then(()=> console.log('Updated'));
+    fetch('/update_reservation_status',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id,status})
+    }).then(r=>r.json()).then(()=> console.log('Updated'));
   });
 });
 
 // Delete buttons
-document.querySelectorAll('.btn-delete').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    const id = btn.dataset.id;
-    if(confirm('Are you sure you want to delete?')){
-      fetch('/delete_item',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})})
-        .then(r=>r.json()).then(()=> location.reload());
-    }
-  });
+document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        if(confirm('Are you sure you want to delete this reservation?')){
+            fetch('/delete_reservation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reservation_id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success){
+                    alert('Deleted successfully');
+                    location.reload();  // or remove the row from the table dynamically
+                } else {
+                    alert('Could not delete: ' + data.error);
+                }
+            });
+        }
+    });
 });
 
-window.addEventListener('load', placeTables);
+
+// Mark Paid (optional)
+document.querySelectorAll('.btn-mark-paid').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const id = btn.dataset.id;
+    fetch('/mark_paid',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id})
+    }).then(r=>r.json()).then(()=> location.reload());
+  });
+});
 </script>
 
 </body>
