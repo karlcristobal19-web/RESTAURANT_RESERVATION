@@ -251,6 +251,7 @@
 <script>
 $(document).ready(function(){
     let selectedItems=[], selectedTableId=null, payReservationId=null;
+    
 
     /* ---------- EXISTING FUNCTIONS (unchanged) ---------- */
     function renderSelectedItems(){
@@ -368,23 +369,118 @@ $(document).ready(function(){
     });
 
     /* ---------- PAYMENT handlers (unchanged) ---------- */
-    $(document).on('click', '.order-toggle', function(){ const id=$(this).data('id'); $("#order-"+id).toggle(); });
-    $(document).on('click', '.pay-now', function(){ payReservationId=$(this).data('id'); $("#paymentModal").fadeIn(200); $("#paymentContent").empty(); });
-    $(document).on('click', '#paymentCancel', function(){ $("#paymentModal").fadeOut(200); payReservationId=null; });
+   // Open payment modal for a reservation
+$(document).on('click', '.pay-now', function() {
+    payReservationId = $(this).data('id'); // this comes from the reservation row/button
+    if (!payReservationId) return alert("Reservation not selected");
 
-    $(document).on('click', '#modalCash', function(){
-        $("#paymentContent").html(`<p style="font-weight:700;">Pay at counter</p>
-            <button id="cashOk" class="btn" type="button">OK</button><button id="cashCancelInner" class="btn" type="button">Cancel</button>`);
-        $(document).off('click', '#cashOk').on('click', '#cashOk', function(){
-            $.post("{{ url_for('submit_payment') }}",{reservation_id:payReservationId,payment_method:'cash'},function(){
-                updateReservationRow(payReservationId,'Paid','Cash'); $("#paymentModal").fadeOut(200); showSuccess("Pay at counter");
-            }).fail(function(jqxhr){ console.error("submit_payment failed:", jqxhr.status, jqxhr.responseText); alert("Payment failed — check console."); });
-        });
-        $(document).off('click', '#cashCancelInner').on('click', '#cashCancelInner', ()=>$("#paymentContent").empty());
+    $("#paymentModal").fadeIn(200);
+    centerPopup("#paymentModal");
+
+    // Reset modal content
+    $("#paymentContent").empty();
+    $("#paymentOptions").show();
+});
+
+// Cancel button closes modal
+$(document).on('click', '#paymentCancel', function() {
+    $("#paymentModal").fadeOut(200);
+    payReservationId = null;
+    $("#paymentContent").empty();
+});
+
+// Cash payment
+$(document).on('click', '#modalCash', function() {
+    if (!payReservationId) return alert("Reservation not selected");
+
+    $("#paymentOptions").hide();
+    $("#paymentContent").html(`
+        <p style="font-weight:700;">Pay at counter</p>
+        <button id="cashOk" class="btn" type="button">OK</button>
+        <button id="cashCancelInner" class="btn" type="button">Cancel</button>
+    `);
+});
+
+// Cash OK
+$(document).on('click', '#cashOk', function() {
+    if (!payReservationId) return alert("Reservation not selected");
+
+    $.post("{{ url_for('submit_payment') }}", {
+        reservation_id: payReservationId,
+        payment_method: 'cash'
+    }, function(response) {
+        if (response.success) {
+            updateReservationRow(payReservationId, 'Paid', 'Cash');
+            $("#paymentModal").fadeOut(200);
+            showSuccess("Pay at counter");
+        } else {
+            alert("Payment failed: " + response.error);
+        }
+    }).fail(function(jqxhr) {
+        console.error("submit_payment failed:", jqxhr.status, jqxhr.responseText);
+        alert("Payment failed — check console.");
     });
+});
 
-    $(document).on('click', "#successPopup .ok-btn", function(){ $("#successPopup").fadeOut(200); });
+// Cash Cancel
+$(document).on('click', '#cashCancelInner', function() {
+    $("#paymentContent").empty();
+    $("#paymentOptions").show();
+});
 
+// GCash payment
+$(document).on('click', '#modalGcash', function() {
+    if (!payReservationId) return alert("Reservation not selected");
+
+    $("#paymentOptions").hide();
+    $("#paymentContent").html(`
+        <p style="font-weight:700; text-align:center;">Pay via GCash</p>
+        <img src="{{ url_for('static', filename='gcash_qr.png') }}" 
+             alt="GCash QR" style="width:200px; display:block; margin:10px auto;">
+        <button id="gcashOk" class="btn" type="button">OK</button>
+        <button id="gcashCancelInner" class="btn" type="button">Cancel</button>
+    `);
+});
+
+// GCash OK
+$(document).on('click', '#gcashOk', function() {
+    if (!payReservationId) return alert("Reservation not selected");
+
+    $.post("{{ url_for('submit_payment') }}", {
+        reservation_id: payReservationId,
+        payment_method: 'gcash'
+    }, function(response) {
+        if (response.success) {
+            updateReservationRow(payReservationId, 'Paid', 'GCash');
+            $("#paymentModal").fadeOut(200);
+            showSuccess("Payment via GCash successful");
+        } else {
+            alert("Payment failed: " + response.error);
+        }
+    }).fail(function(jqxhr) {
+        console.error("submit_payment failed:", jqxhr.status, jqxhr.responseText);
+        alert("Payment failed — check console.");
+    });
+});
+
+// GCash Cancel
+$(document).on('click', '#gcashCancelInner', function() {
+    $("#paymentContent").empty();
+    $("#paymentOptions").show();
+});
+
+// Center popup
+function centerPopup(selector){
+    const $popup = $(selector);
+    const top = ($(window).height() - $popup.outerHeight()) / 2;
+    const left = ($(window).width() - $popup.outerWidth()) / 2;
+    $popup.css({position: 'fixed', top: top + 'px', left: left + 'px'});
+}
+
+$(window).resize(function(){ 
+    centerPopup("#paymentModal"); 
+});
+});
     /* ---------- NEW: Setup table list for update modal ---------- */
     function populateTableOptions(selectEl){
         // build options from floor map .table elements
@@ -516,7 +612,7 @@ $("#updateForm").on('submit', function(e){
     /* ---------- INITIALIZE ---------- */
     renderSelectedItems();
     loadReservations();
-});
+
 
 /* ---------- existing helper functions to render reservation rows ---------- */
 function addReservationRow(res){
